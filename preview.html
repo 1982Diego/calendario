@@ -231,6 +231,13 @@ img{max-width:100%}
 .cd .u b{display:block;font-family:'Barlow Condensed';font-weight:900;font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
 .cd .u span{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.72}
 .hn-live{font:900 12px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--vb);padding:8px 14px;border-radius:11px;align-self:center;box-shadow:0 6px 20px rgba(255,92,26,.5)}
+.hn-form{margin-top:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hn-form .hf-k{font:800 9px/1 'Barlow Condensed';letter-spacing:.16em;text-transform:uppercase;color:#fff;opacity:.72}
+.hf-g{display:inline-flex;align-items:center;gap:5px;font:700 11px/1 Inter;color:#fff;background:var(--glass);border:1px solid var(--glassbd);border-radius:8px;padding:5px 8px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);white-space:nowrap}
+.hf-g b{font-family:'Barlow Condensed';font-weight:900;font-size:12px}
+.hf-g .hf-o{opacity:.66;font-size:9.5px;letter-spacing:.03em}
+.hf-g.w{background:color-mix(in srgb,var(--win) 42%,transparent);border-color:color-mix(in srgb,var(--win) 62%,transparent)}
+.hf-g.l{background:color-mix(in srgb,var(--loss) 40%,transparent);border-color:color-mix(in srgb,var(--loss) 58%,transparent)}
 
 /* ══ Banda de stats + rachas ══ */
 .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:11px}
@@ -337,6 +344,9 @@ img{max-width:100%}
 .gc-f{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
 .gc-wrap{position:relative;display:inline-block;line-height:0}
 .gv-badge{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.3);display:grid;place-items:center;font-size:11px;line-height:1}
+.gcell.gc-home{background:linear-gradient(145deg,color-mix(in srgb,var(--vb) 14%,var(--card)),var(--card) 66%)}
+.gcell.gc-away{background:linear-gradient(145deg,color-mix(in srgb,var(--away) 14%,var(--card)),var(--card) 66%)}
+.gcell.gc-neutral{background:linear-gradient(145deg,color-mix(in srgb,var(--neutral) 15%,var(--card)),var(--card) 66%)}
 .gv-time{font:800 13px/1 'Barlow Condensed';letter-spacing:.02em;color:var(--ink)}
 
 /* ══ COMPETICIÓN (liga completa) ══ */
@@ -632,6 +642,13 @@ function elLoadStand(rnd){ rnd=rnd||EL.round||1;
 function elLoad(){ return elLoadGames().then(function(ok){ if(ok&&EL.round>0) return elLoadStand(EL.round); return ok; }); }
 function elResult(homeName,awayName){ var hc=elCode(homeName), ac=elCode(awayName); if(!hc||!ac) return null;
   var r=EL.res[hc+'|'+ac]; return (r&&r.played&&r.h!=null&&r.a!=null)?r:null; }
+// últimos N partidos JUGADOS de un club (por código) — más reciente primero. Para "cómo llega el rival".
+function elLastN(code,n){ if(!code) return [];
+  var arr=[]; Object.keys(EL.res).forEach(function(k){ var r=EL.res[k]; if(!r.played||r.h==null||r.a==null) return;
+    if(r.homeCode===code||r.awayCode===code) arr.push(r); });
+  arr.sort(function(a,b){ return (b.round-a.round) || (a.date<b.date?1:(a.date>b.date?-1:0)); });
+  return arr.slice(0,n).map(function(r){ var home=(r.homeCode===code), us=home?r.h:r.a, them=home?r.a:r.h, oc=home?r.awayCode:r.homeCode;
+    return {res:us>them?'W':(us<them?'L':'T'), us:us, them:them, opp:(EL.c2n[oc]||oc), oppCode:oc, home:home, gc:r.gc}; }); }
 
 function vbLive(m){ if(!m.date) return null;
   if(m.comp==='Euroliga'){ var hn=m.home?CAL.team:m.opp, an=m.home?m.opp:CAL.team, er=elResult(hn,an);
@@ -789,13 +806,19 @@ function heroHTML(C){
     var hArena=m.neutral?(m.arena||'Sede neutral'):(m.home?(CAL.homeArena||'Casa'):(m.arena||'Fuera'));
     var vtxt=(m.neutral?'🏟️ ':(m.home?'🏠 ':'✈️ '))+esc(hArena)+(m.cap?' · '+fmtCap(m.cap):'');
     var crest=logoImg(m.opp,'hn-crest');
+    var formHTML='';
+    var _oc=elCode(m.opp);
+    if(_oc){ var _l3=elLastN(_oc,3);
+      if(_l3.length){ formHTML='<div class="hn-form"><span class="hf-k">Cómo llega</span>'
+        +_l3.map(function(g){ return '<span class="hf-g '+(g.res==='W'?'w':(g.res==='L'?'l':''))+'" title="'+(g.home?'vs ':'@ ')+esc(g.opp)+'"><b>'+(g.res==='W'?'V':(g.res==='L'?'D':'—'))+'</b> '+g.us+'-'+g.them+' <span class="hf-o">'+(g.home?'':'@')+esc(g.oppCode)+'</span></span>'; }).join('')
+        +'</div>'; } }
     next='<div class="hero-next"><div class="hn-l"><div class="hk">Próximo partido</div>'
       +'<div class="hn-match">'+crest
         +'<div><div class="hn-opp"><span class="vs">'+(m.home&&!m.neutral?'vs':(m.neutral?'vs':'@'))+'</span>'+esc(m.opp)+'</div>'
         +'<div class="hn-meta"><span class="pill" style="background:'+c.color+'">'+esc(c.short)+' '+esc(m.round||'')+'</span>'
           +'<span>'+fmtDate(d)+'</span><span class="sep">·</span><span>'+(m.time?m.time+'h':'hora por confirmar')+'</span>'
           +'<span class="sep">·</span><span>'+vtxt+'</span></div></div></div>'
-      +'</div><div class="cd" id="cd"></div></div>';
+      +formHTML+'</div><div class="cd" id="cd"></div></div>';
   }
   return '<div class="hero">'+bg+'<div class="hero-in">'+top+next+'</div></div>';
 }
@@ -912,6 +935,7 @@ function gridHTML(vis,C){
         if(dnum==null){ H+='<div class="gcell pad"></div>'; continue; }
         var ms=dmap[dnum]||[], isToday=dayNum(new Date(yr,mo,dnum))===todayN;
         var dense=ms.some(function(m){return C.dense[mid(m)];});
+        var vcls=ms.length?(ms[0].neutral?' gc-neutral':(ms[0].home?' gc-home':' gc-away')):'';
         var head='<div class="gc-h"><span class="dn">'+dnum+'</span>'+(ms.length?compMini(ms[0]):'')+'</div>';
         var ev='';
         if(ms.length){ var m0=ms[0], cc=comp(m0);
@@ -923,7 +947,7 @@ function gridHTML(vis,C){
             +(ms.length>1?'<span class="gmore">+'+(ms.length-1)+' más</span>':'')+'</div>'
             +'<div class="gc-f">'+(gvr?'<span class="gv-time" style="color:var(--vb)">'+gvr.us+'-'+gvr.them+'</span>':(m0.time?'<span class="gv-time">'+esc(m0.time)+'</span>':''))+'</div>';
         }
-        H+='<div class="gcell'+(ms.length?' has':'')+(isToday?' today':'')+(dense?' dense':'')+'">'+head+ev+'</div>';
+        H+='<div class="gcell'+(ms.length?' has':'')+vcls+(isToday?' today':'')+(dense?' dense':'')+'">'+head+ev+'</div>';
       }
       H+='</div>';
     }
