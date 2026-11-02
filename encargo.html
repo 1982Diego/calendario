@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>VB · Encargo de clips</title>
+<!--
+  Formulario de ENCARGO DE CLIPS para el buzón de vídeo, en el móvil. Página estática SIN DATOS (repo público de
+  GitHub Pages): el borrador vive en localStorage del móvil; «📤 Mandar al PC» publica el encargo.txt en el tema
+  ntfy privado de las notas (clave «vbn-key», la misma que notas.html, mismo origen) como «VBE1|id|i|n|base64».
+  En el PC: alertas_movil.js (onEncargo) lo suelta en Videos\Sala de video\_buzon\, lanza buzon.py y avisa al
+  móvil al terminar. El desplegable de Partido sale de «VBD1» (sala: partidos con vídeo en el PC).
+  Fuente: raw/notas_movil/encargo.html (generada desde clipcut/encargo_formulario.html) → copia en vb-cal-site.
+-->
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: una columna de mesa de montaje — paneles apilados, el editor de cortes como «marcador», barra de exportar fija abajo */
+:root{
+  --bg:#f2f5f7; --panel:#ffffff; --panel2:#e9eef1; --line:#d3dce2; --ink:#13202a; --muted:#5b6a76;
+  --teal:#0b9a82; --tealink:#ffffff; --amber:#a86f00; --bad:#c43d3d; --good:#0b8a5c;
+  --display:'Barlow Condensed','Bahnschrift','Arial Narrow',sans-serif;
+  --body:'Barlow','Bahnschrift','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Mono','Consolas',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#17202a; --panel2:#1e2934; --line:#2b3946; --ink:#e6edf2; --muted:#8d9ba8;
+  --teal:#19c3a6; --tealink:#06231d; --amber:#f5b83d; --bad:#f07575; --good:#3ccf91; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#17202a; --panel2:#1e2934; --line:#2b3946; --ink:#e6edf2; --muted:#8d9ba8;
+  --teal:#19c3a6; --tealink:#06231d; --amber:#f5b83d; --bad:#f07575; --good:#3ccf91; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:640px;margin:0 auto;padding-block:18px 132px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:14px}
+header h1{font-family:var(--display);font-size:30px;line-height:1.05;margin:2px 0 4px;letter-spacing:.3px;text-wrap:balance}
+header p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--teal)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.panel h2{font-family:var(--display);font-size:19px;margin:0;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+input[type=text],input[type=search],textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.hint{font-size:12.5px;color:var(--muted);font-weight:400}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+@media (max-width:520px){.seg{grid-template-columns:repeat(2,1fr)}}
+.seg button,.qbtns button,.chip,.opt{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px}
+.seg button{padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.seg button b{font-family:var(--display);font-size:18px;line-height:1}
+.seg button small{font-size:11.5px;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:var(--tealink)}
+.seg button[aria-pressed=true] small{color:var(--tealink);opacity:.85}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row > input{flex:1 1 180px}
+.btn{font:inherit;font-weight:700;cursor:pointer;border-radius:10px;padding:10px 14px;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:var(--tealink)}
+.btn.warn{color:var(--bad)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 10px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed=true]{border-color:var(--amber);color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,var(--panel2))}
+.chip .x{font-weight:700;color:var(--muted)}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.opt{display:flex;align-items:flex-start;gap:9px;padding:10px;text-align:left}
+.opt input{margin:2px 0 0;width:18px;height:18px;accent-color:var(--teal);flex:none}
+.opt span{display:flex;flex-direction:column;font-size:14.5px;font-weight:600;min-width:0}
+.opt span small{font-weight:400;color:var(--muted);font-size:12px}
+.radios{display:flex;flex-wrap:wrap;gap:6px}
+.radios label{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);font-size:14px;cursor:pointer}
+.radios input{accent-color:var(--teal)}
+/* editor de cortes: el «marcador» */
+.board{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.qbtns{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.qbtns button{padding:9px 0;font-family:var(--display);font-size:17px;font-weight:700}
+.qbtns button[aria-pressed=true]{background:var(--amber);border-color:var(--amber);color:#1b1300}
+.clocks{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+.clocks .arrow{font-family:var(--mono);color:var(--muted);padding-bottom:12px}
+.clock input{font-family:var(--mono);font-size:30px;font-weight:700;text-align:center;letter-spacing:1px;padding:8px 6px;font-variant-numeric:tabular-nums}
+.clock input.err{border-color:var(--bad)}
+.quick{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.quick .chip{font-family:var(--mono);font-size:13px;padding:5px 8px}
+.msg{font-size:13px;min-height:1em}
+.msg.err{color:var(--bad)} .msg.ok{color:var(--good)}
+.cuts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cuts li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.cuts li.editing{border-color:var(--amber)}
+.cuts .cq{font-family:var(--display);font-weight:700;font-size:17px;color:var(--amber);min-width:2.4em}
+.cuts .ct{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+.cuts .cn{font-size:13px;color:var(--muted);display:block;overflow-wrap:anywhere}
+.cuts .cb{display:flex;gap:4px}
+.cuts .cb button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:5px 9px;cursor:pointer}
+.empty{font-size:13.5px;color:var(--muted);padding:6px 2px}
+.range{display:flex;align-items:center;gap:10px}
+.range input{flex:1;accent-color:var(--teal)}
+.range output{font-family:var(--mono);font-weight:700;min-width:3.2em;text-align:right}
+pre.txt{margin:0;font-family:var(--mono);font-size:13px;line-height:1.55;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;
+  white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto}
+pre.txt .c{color:var(--muted)}
+details.guide{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
+details.guide summary{cursor:pointer;font-family:var(--display);font-size:19px;font-weight:700;padding:10px 0;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.guide summary::after{content:"+";font-family:var(--mono);color:var(--teal)}
+details.guide[open] summary::after{content:"−"}
+.guide h3{font-size:14.5px;margin:12px 0 4px}
+.guide p,.guide li{font-size:14.5px;max-width:65ch}
+.guide ol,.guide ul{padding-left:20px;margin:4px 0}
+.guide code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:1px 5px;border-radius:5px}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:center}
+.bar .hint{grid-column:1/-1}
+.nk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
+.nk.ok{color:var(--good)} .nk .btn{padding:6px 10px;font-size:12.5px}
+.bar .st{grid-column:1/-1;font-size:12.5px;color:var(--muted);min-height:1em}
+.bar .st.ok{color:var(--good)} .bar .st.err{color:var(--bad)}
+.bar .btn.pri{padding:12px 14px}
+[hidden]{display:none!important}
+@media (max-width:420px){.opts{grid-template-columns:1fr}.clock input{font-size:26px}}
+@media (prefers-reduced-motion:no-preference){.btn,.chip,.seg button{transition:background .15s,border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Sala de vídeo · buzón</div>
+    <h1>Encargo de clips</h1>
+    <p>Marca lo que quieres, apunta tus cortes mientras ves el partido y exporta el <code style="font-family:var(--mono)">encargo.txt</code>. En el PC lo dejas en la carpeta del partido, junto al vídeo y el CSV, y el buzón te devuelve el vídeo montado.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-modo">
+    <h2 id="h-modo">¿Qué quieres montar?</h2>
+    <div class="seg" role="group" aria-label="Modo">
+      <button type="button" id="m-A" data-mode="A"><b>Jugador</b><small>sus jugadas, solo</small></button>
+      <button type="button" id="m-B" data-mode="B"><b>Mis cortes</b><small>cuarto + reloj</small></button>
+      <button type="button" id="m-C" data-mode="C"><b>Equipo</b><small>todas las de un equipo</small></button>
+      <button type="button" id="m-R" data-mode="R"><b>Full report</b><small>un vídeo por sección</small></button>
+    </div>
+  </section>
+
+  <!-- MODO A -->
+  <section class="panel" id="pA" aria-labelledby="h-a">
+    <h2 id="h-a">Jugador <span class="n">modo A</span></h2>
+    <label class="f" for="pl-in">Jugador o jugadores
+      <span class="row"><input type="text" id="pl-in" placeholder="Apellido, p. ej. Ballo" autocomplete="off" enterkeyhint="done">
+      <button type="button" class="btn" id="pl-add">Añadir</button></span>
+      <span class="hint">Basta el apellido como sale en la caja. Si hay dos iguales, añade la inicial.</span>
+    </label>
+    <div class="chips" id="pl-chips" aria-live="polite"></div>
+  </section>
+
+  <!-- MODO C -->
+  <section class="panel" id="pC" aria-labelledby="h-c">
+    <h2 id="h-c">Equipo <span class="n">modo C</span></h2>
+    <label class="f" for="team">Equipo
+      <input type="text" id="team" placeholder="p. ej. Valencia" autocomplete="off">
+      <span class="hint">Una palabra que lo identifique basta (Valencia, Besiktas, Olympiacos).</span>
+    </label>
+  </section>
+
+  <!-- MODO FULL REPORT -->
+  <section class="panel" id="pR" aria-labelledby="h-r">
+    <h2 id="h-r">Full report <span class="n">un vídeo por sección</span></h2>
+    <label class="f" for="fr-pl">Jugador
+      <input type="text" id="fr-pl" placeholder="p. ej. Diarra" autocomplete="off">
+      <span class="hint">Junta sus últimos partidos ya preparados en la Sala y monta un vídeo por sección (≤90" cada uno) con su cabecera de datos.</span>
+    </label>
+    <label class="f" for="fr-g">Guion de secciones
+      <input type="text" id="fr-g" list="fr-gl" placeholder="Interior (Big)" autocomplete="off">
+      <datalist id="fr-gl"><option value="Interior (Big)"><option value="Exterior"><option value="Alero / 3-4"></datalist>
+      <span class="hint">De serie: Interior (Big), Exterior, Alero / 3-4. Vale también el nombre de un guion tuyo guardado en la Sala.</span>
+    </label>
+    <div class="f"><span>Partidos</span>
+      <div class="radios" role="radiogroup" aria-label="Partidos">
+        <label><input type="radio" name="frn" value="3"> 3</label><label><input type="radio" name="frn" value="5"> 5</label>
+        <label><input type="radio" name="frn" value="8"> 8</label><label><input type="radio" name="frn" value="10"> 10</label></div>
+      <span class="hint">Sus N últimos partidos con la Sala preparada.</span></div>
+    <div class="f"><span>De cada jugada</span>
+      <div class="radios" role="radiogroup" aria-label="Duración de cada clip">
+        <label><input type="radio" name="frc" value="8"> 8 s</label><label><input type="radio" name="frc" value="12"> 12 s</label>
+        <label><input type="radio" name="frc" value="16"> 16 s</label><label><input type="radio" name="frc" value="entera"> entera</label></div>
+      <span class="hint">Los últimos segundos de cada posesión. Con 12 s entran unos 7 clips por sección.</span></div>
+  </section>
+
+  <!-- MODO B -->
+  <section class="panel" id="pB" aria-labelledby="h-b">
+    <h2 id="h-b">Mis cortes <span class="n">modo B</span></h2>
+    <label class="f" for="prota">Protagonista (opcional)
+      <input type="text" id="prota" placeholder="p. ej. Ballo" autocomplete="off">
+      <span class="hint">Pone su ficha en los clips. Déjalo vacío si son cortes del partido en general.</span>
+    </label>
+
+    <div class="board" aria-label="Nuevo corte">
+      <div class="qbtns" role="group" aria-label="Cuarto">
+        <button type="button" data-q="1">Q1</button><button type="button" data-q="2">Q2</button><button type="button" data-q="3">Q3</button>
+        <button type="button" data-q="4">Q4</button><button type="button" data-q="5">PR1</button><button type="button" data-q="6">PR2</button>
+      </div>
+      <div class="clocks">
+        <label class="f clock" for="c-s">Empieza (reloj)
+          <input type="text" id="c-s" inputmode="decimal" placeholder="9:34" autocomplete="off" enterkeyhint="next"></label>
+        <span class="arrow" aria-hidden="true">→</span>
+        <label class="f clock" for="c-e">Acaba (reloj)
+          <input type="text" id="c-e" inputmode="decimal" placeholder="9:21" autocomplete="off" enterkeyhint="done"></label>
+      </div>
+      <div class="quick" aria-label="Atajos para el final">
+        <span class="hint">Acaba a</span>
+        <button type="button" class="chip" data-d="8">−8 s</button><button type="button" class="chip" data-d="12">−12 s</button>
+        <button type="button" class="chip" data-d="20">−20 s</button><button type="button" class="chip" data-d="30">−30 s</button>
+      </div>
+      <div class="chips" role="group" aria-label="Etiquetas">
+        <button type="button" class="chip" data-tag="bloqueo">bloqueo</button>
+        <button type="button" class="chip" data-tag="corte">corte</button>
+        <button type="button" class="chip" data-tag="pase previo">pase previo</button>
+        <button type="button" class="chip" data-tag="defensa">defensa</button>
+        <button type="button" class="chip" data-tag="rebote">rebote</button>
+      </div>
+      <input type="text" id="c-note" placeholder="Nota (opcional): lo que quieres ver en el clip" autocomplete="off" enterkeyhint="done">
+      <div class="row">
+        <button type="button" class="btn pri" id="c-add">Añadir corte</button>
+        <button type="button" class="btn" id="c-cancel" hidden>Cancelar edición</button>
+      </div>
+      <div class="msg" id="c-msg" role="status"></div>
+    </div>
+
+    <ul class="cuts" id="cuts" aria-label="Cortes apuntados"></ul>
+    <div class="empty" id="cuts-empty">Aún no hay cortes. Elige el cuarto, escribe el reloj de inicio y de fin («934» vale por 9:34) y pulsa Añadir.</div>
+
+    <label class="opt" for="also"><input type="checkbox" id="also"><span>Además, sus clips automáticos<small>Si pones protagonista, monta aparte un segundo vídeo con sus jugadas (como el modo A); debajo eliges cuáles</small></span></label>
+    <label class="opt" for="sala"><input type="checkbox" id="sala"><span>Guardar en la Sala<small>Tus cortes aparecen como «✍ Propias» en la Sala de ese partido</small></span></label>
+  </section>
+
+  <!-- qué jugadas: modos A y C, y en el modo B el vídeo automático del protagonista -->
+  <section class="panel" id="pRol" aria-labelledby="h-rol">
+    <h2 id="h-rol">Qué jugadas</h2>
+    <p class="hint" id="rol-note" hidden>Solo para el vídeo automático del protagonista. Tus cortes salen siempre tal cual los apuntas.</p>
+    <div class="radios" role="radiogroup" aria-label="Rol">
+      <label><input type="radio" name="rol" id="rol-" value=""> Todas</label>
+      <label><input type="radio" name="rol" id="rol-fin" value="finaliza"> Las que finaliza</label>
+      <label><input type="radio" name="rol" id="rol-crea" value="crea"> Las que crea</label>
+      <label><input type="radio" name="rol" id="rol-def" value="defensa"> En defensa / participa</label>
+    </div>
+    <label class="opt" for="reel"><input type="checkbox" id="reel"><span>Reel corto<small>Solo lo esencial, no todas sus jugadas</small></span></label>
+  </section>
+
+  <section class="panel" aria-labelledby="h-opt">
+    <h2 id="h-opt">Opciones</h2>
+    <label class="f" for="game">Partido (opcional)
+      <input type="text" id="game" list="games" placeholder="elige o escribe parte del nombre" autocomplete="off"><datalist id="games"></datalist>
+      <span class="hint">Toca el campo para ver los partidos con vídeo en tu PC. Si aún no lo has descargado, escribe parte del nombre: el PC espera a que llegue y te avisa. En «Full report» puede ir vacío.</span>
+      <span class="nk" id="nk"><span id="nkt"></span><button type="button" class="btn" id="nkb">🔑 Clave</button></span>
+    </label>
+    <label class="f" for="title">Título del vídeo (opcional)
+      <input type="text" id="title" placeholder="p. ej. Ballo vs Besiktas" autocomplete="off">
+    </label>
+    <div class="opts">
+      <label class="opt" for="ficha"><input type="checkbox" id="ficha"><span>Ficha al empezar<small>Presentación del jugador al inicio del vídeo</small></span></label>
+      <label class="opt" for="audio"><input type="checkbox" id="audio"><span>Con sonido<small>Mantiene el audio de la retransmisión</small></span></label>
+    </div>
+    <div class="f"><span>Margen en cada clip</span>
+      <div class="range"><input type="range" id="margin" min="0" max="6" step="0.5" aria-label="Margen en segundos"><output id="margin-o" for="margin">1 s</output></div>
+      <span class="hint">Segundos extra antes y después de cada jugada.</span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-prev">
+    <h2 id="h-prev">Así queda tu encargo.txt</h2>
+    <pre class="txt" id="txt" aria-live="polite"></pre>
+    <div class="row"><button type="button" class="btn warn" id="reset">Empezar un encargo nuevo</button></div>
+  </section>
+
+  <details class="guide" id="guia">
+    <summary>Guía de uso</summary>
+    <h3>El flujo</h3>
+    <ol>
+      <li>Abre esta página en el móvil o en el PC y elige el modo.</li>
+      <li>Mientras ves el partido, apunta cada corte: cuarto, reloj del marcador al empezar y al acabar. Se guarda solo en este dispositivo, aunque cierres la página.</li>
+      <li>Pulsa <b>Exportar encargo.txt</b>. En el móvil lo guardas donde quieras (OneDrive, Archivos…); también puedes copiar el texto.</li>
+      <li>En el PC, deja el <code>encargo.txt</code> dentro de la carpeta del partido (la de VideoExpress, con los segmentos y el <code>Export.csv</code>) y suelta la carpeta en <code>Videos\Sala de video\_buzon\</code>.</li>
+      <li>El buzón lo procesa solo (cada 3 minutos) y te deja el vídeo en <code>_buzon\listos\</code>, con versión para móvil e informe.</li>
+    </ol>
+    <h3>Si el partido ya está en la Sala</h3>
+    <p>No hace falta copiar el vídeo otra vez: rellena <b>Partido</b> (el id que sale entre paréntesis en la carpeta, p. ej. <code>3649652</code>) y suelta solo el .txt en el buzón.</p>
+    <h3>Los cuatro modos</h3>
+    <ul>
+      <li><b>Jugador</b>: corta todas sus jugadas (o solo las que finaliza, crea o defiende). <b>Reel corto</b> se queda con lo esencial.</li>
+      <li><b>Mis cortes</b>: corta exactamente los tramos que apuntas. Si pones protagonista, los clips llevan su ficha. Con «Además, sus clips automáticos» recibes también un segundo vídeo con sus jugadas, y puedes elegir cuáles (todas, las que finaliza, crea o defiende) y si quieres el reel corto.</li>
+      <li><b>Equipo</b>: todas las jugadas de un equipo, con el mismo filtro de «Qué jugadas».</li>
+      <li><b>Full report</b>: para el informe de jugador. No hace falta partido: suelta solo el .txt en el buzón y junta sus últimos partidos preparados. Sale un vídeo por sección (Finalización, Defensa del bloqueo…) con su cabecera de datos y un .txt con los capítulos para YouTube. Para cambiar secciones, abre la sala «Full report · jugador» y usa «📚 Full report».</li>
+    </ul>
+    <h3>Cómo escribir el reloj</h3>
+    <ul>
+      <li>El reloj del marcador va hacia atrás: el inicio es el número más alto (9:34) y el final el más bajo (9:21).</li>
+      <li>Escribe <code>934</code>, <code>9:34</code> o <code>9.34</code>: todo vale 9:34. En el último minuto puedes usar décimas: <code>45.3</code>.</li>
+      <li>Si el reloj estaba parado justo cuando empieza lo que quieres ver, apunta un segundo más (9:35): el corte arranca cuando el reloj se mueve.</li>
+      <li>Los atajos «−8 s», «−12 s»… rellenan el final a partir del inicio.</li>
+    </ul>
+    <h3>Cámara y marcador</h3>
+    <p>El buzón ajusta el inicio y el final de cada corte al fotograma más cercano con plano de juego y marcador visible (no repeticiones ni primeros planos). Si no lo consigue, lo avisa en el informe del montaje.</p>
+    <h3>Etiquetas y notas</h3>
+    <p>Las etiquetas (bloqueo, corte, pase previo, defensa, rebote) clasifican el clip en la Sala; la nota sale en la ficha del clip.</p>
+  </details>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <div class="st" id="st" role="status"></div>
+    <span class="hint" id="sum"></span>
+    <button type="button" class="btn" id="copy">Copiar texto</button>
+    <button type="button" class="btn" id="export">⬇ .txt</button>
+    <button type="button" class="btn pri" id="send">📤 Mandar al PC</button>
+  </div>
+</div>
+
+<script>
+/* ===== GEN: lógica pura (reloj y texto del encargo), probada contra el lector del buzón ===== */
+function parseClock(v){
+  v=String(v||'').trim().replace(',','.');
+  if(!v) return null;
+  var m=v.match(/^(\d{1,2}):(\d{1,2})(?:\.(\d))?$/);
+  if(m){var s=+m[1]*60+ +m[2]+(m[3]?+m[3]/10:0); return +m[2]<60?s:null;}
+  m=v.match(/^(\d{1,2})\.(\d{2})$/);
+  if(m&&+m[2]<60) return +m[1]*60+ +m[2];
+  m=v.match(/^(\d{1,2})\.(\d)$/);
+  if(m) return +m[1]+ +m[2]/10;               // 45.3 = 45,3 s (último minuto)
+  m=v.match(/^\d{1,4}$/);
+  if(m){ if(v.length<=2) return +v;           // 45 = 0:45
+    var mm=+v.slice(0,-2), ss=+v.slice(-2); return ss<60?mm*60+ss:null; }  // 934 = 9:34
+  return null;
+}
+function fmtClock(s){
+  if(s==null) return '';
+  if(s<60 && Math.round(s*10)%10) return (Math.floor(s*10)/10).toFixed(1).replace(/^(\d)\./,'0:0$1.').replace(/^(\d\d)\./,'0:$1.');
+  s=Math.round(s); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}
+function qName(q){return q<=4?'Q'+q:'PR'+(q-4);}
+function qLen(q){return q<=4?600:300;}
+function buildTxt(S,stamp){
+  var L=['# Encargo para el buzón de vídeo · '+(stamp||'')];
+  var yes=function(b){return b?'sí':'no';};
+  if(S.game) L.push('PARTIDO: '+S.game);
+  if(S.title) L.push('TITULO: '+S.title);
+  if(S.mode==='A'){
+    L.push('# Modo A · clips de jugador');
+    if(S.players.length) L.push('JUGADOR: '+S.players.join(', '));
+    L.push('REEL: '+yes(S.reel));
+    if(S.rol) L.push('ROL: '+S.rol);
+  } else if(S.mode==='C'){
+    L.push('# Modo C · clips de equipo');
+    if(S.team) L.push('EQUIPO: '+S.team);
+    L.push('REEL: '+yes(S.reel));
+    if(S.rol) L.push('ROL: '+S.rol);
+  } else if(S.mode==='R'){
+    L.push('# Full report · un vídeo por sección');
+    if(S.frPl) L.push('JUGADOR: '+S.frPl);
+    L.push('INFORME: sí');
+    if(S.frG) L.push('GUION: '+S.frG);
+    L.push('PARTIDOS: '+S.frN);
+    L.push('CLIP: '+S.frC);
+  } else {
+    L.push('# Modo B · mis cortes (cuarto, reloj inicio/fin, etiquetas y nota)');
+    if(S.prota) L.push('JUGADOR: '+S.prota);
+    S.cuts.forEach(function(c){
+      var extra=[].concat(c.tags||[]).concat(c.note?[c.note]:[]).join(' · ');
+      L.push(qName(c.q)+' '+fmtClock(c.s)+'/'+fmtClock(c.e)+(extra?' '+extra:''));
+    });
+    if(S.prota) L.push('TAMBIEN AUTO: '+yes(S.also));
+    if(S.prota&&S.also){ L.push('REEL: '+yes(S.reel)); if(S.rol) L.push('ROL: '+S.rol); }
+    L.push('GUARDAR EN SALA: '+yes(S.sala));
+  }
+  L.push('# Opciones');
+  L.push('FICHA: '+yes(S.ficha));
+  L.push('AUDIO: '+yes(S.audio));
+  L.push('MARGEN: '+String(S.margin).replace('.',','));
+  return L.join('\n')+'\n';
+}
+/* ===== /GEN ===== */
+
+var KEY='vb-encargo-borrador-v1';
+var DEF={mode:'A',players:[],team:'',rol:'',reel:false,prota:'',cuts:[],also:false,sala:true,game:'',title:'',ficha:true,audio:false,margin:1,frPl:'',frG:'',frN:'5',frC:'12'};
+var S=load(), Q=1, TAGS=[], EDIT=-1;
+function load(){try{var j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&typeof j==='object')return Object.assign({},DEF,j);}catch(e){}return JSON.parse(JSON.stringify(DEF));}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+var $=function(id){return document.getElementById(id);};
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function today(){var d=new Date();return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+function problems(){
+  var p=[];
+  if(S.mode==='A'&&!S.players.length) p.push('Añade al menos un jugador.');
+  if(S.mode==='C'&&!S.team.trim()) p.push('Escribe el equipo.');
+  if(S.mode==='B'&&!S.cuts.length) p.push('Apunta al menos un corte.');
+  if(S.mode==='R'&&!S.frPl.trim()) p.push('Escribe el jugador del informe.');
+  return p;
+}
+function render(){
+  ['A','B','C','R'].forEach(function(m){$('m-'+m).setAttribute('aria-pressed',S.mode===m?'true':'false');});
+  $('pA').hidden=S.mode!=='A'; $('pB').hidden=S.mode!=='B'; $('pC').hidden=S.mode!=='C'; $('pR').hidden=S.mode!=='R'; var autoB=S.mode==='B'&&S.also&&!!S.prota; $('pRol').hidden=(S.mode==='B'&&!autoB)||S.mode==='R';
+  $('fr-pl').value=S.frPl; $('fr-g').value=S.frG;
+  document.querySelectorAll('input[name=frn]').forEach(function(r){r.checked=(r.value===String(S.frN));}); document.querySelectorAll('input[name=frc]').forEach(function(r){r.checked=(r.value===String(S.frC));});
+  $('h-rol').textContent=autoB?'Vídeo automático: qué jugadas':'Qué jugadas'; $('rol-note').hidden=!autoB;
+  $('pl-chips').innerHTML=S.players.map(function(n,i){return '<button type="button" class="chip" data-del="'+i+'" aria-label="Quitar '+esc(n)+'">'+esc(n)+' <span class="x" aria-hidden="true">✕</span></button>';}).join('');
+  $('team').value=S.team; $('prota').value=S.prota; $('game').value=S.game; $('title').value=S.title;
+  document.querySelectorAll('input[name=rol]').forEach(function(r){r.checked=(r.value===S.rol);});
+  $('reel').checked=S.reel; $('also').checked=S.also; $('sala').checked=S.sala; $('ficha').checked=S.ficha; $('audio').checked=S.audio;
+  $('margin').value=S.margin; $('margin-o').textContent=String(S.margin).replace('.',',')+' s';
+  document.querySelectorAll('.qbtns button').forEach(function(b){b.setAttribute('aria-pressed',+b.dataset.q===Q?'true':'false');});
+  document.querySelectorAll('.board [data-tag]').forEach(function(b){b.setAttribute('aria-pressed',TAGS.indexOf(b.dataset.tag)>=0?'true':'false');});
+  var cuts=S.cuts.map(function(c,i){return {c:c,i:i};}).sort(function(a,b){return a.c.q-b.c.q||b.c.s-a.c.s;});
+  $('cuts').innerHTML=cuts.map(function(o){var c=o.c,extra=[].concat(c.tags||[]).concat(c.note?[c.note]:[]).join(' · ');
+    return '<li'+(o.i===EDIT?' class="editing"':'')+'><span class="cq">'+qName(c.q)+'</span><span><span class="ct">'+fmtClock(c.s)+' → '+fmtClock(c.e)+'</span>'
+      +'<span class="cn">'+Math.round((c.s-c.e)*10)/10+' s de reloj'+(extra?' · '+esc(extra):'')+'</span></span>'
+      +'<span class="cb"><button type="button" data-edit="'+o.i+'" aria-label="Editar">Editar</button><button type="button" data-rm="'+o.i+'" aria-label="Borrar">✕</button></span></li>';}).join('');
+  $('cuts-empty').hidden=S.cuts.length>0;
+  $('c-add').textContent=EDIT>=0?'Guardar cambios':'Añadir corte'; $('c-cancel').hidden=EDIT<0;
+  var txt=buildTxt(S,today());
+  $('txt').innerHTML=txt.split('\n').map(function(l){return l.charAt(0)==='#'?'<span class="c">'+esc(l)+'</span>':esc(l);}).join('\n');
+  var pb=problems();
+  $('sum').textContent=S.mode==='R'?('Full report · '+(S.frPl||'sin jugador')):S.mode==='B'?S.cuts.length+' corte'+(S.cuts.length===1?'':'s'):(S.mode==='A'?S.players.length+' jugador'+(S.players.length===1?'':'es'):(S.team||'sin equipo'));
+  $('export').disabled=$('copy').disabled=$('send').disabled=pb.length>0;
+  setSt(pb.length?pb[0]:'', pb.length?'err':'');
+  save();
+}
+function setSt(t,k){var e=$('st');e.textContent=t||'';e.className='st'+(k?' '+k:'');}
+function cmsg(t,k){var e=$('c-msg');e.textContent=t||'';e.className='msg'+(k?' '+k:'');}
+
+/* modo y campos */
+document.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){S.mode=b.dataset.mode;render();});});
+function addPlayers(){var v=$('pl-in').value.split(/[,;+]/).map(function(x){return x.trim();}).filter(Boolean);
+  v.forEach(function(n){if(S.players.indexOf(n)<0)S.players.push(n);}); $('pl-in').value=''; render();}
+$('pl-add').addEventListener('click',addPlayers);
+$('pl-in').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addPlayers();}});
+$('pl-chips').addEventListener('click',function(e){var b=e.target.closest('[data-del]');if(b){S.players.splice(+b.dataset.del,1);render();}});
+[['team','team'],['prota','prota'],['game','game'],['title','title'],['fr-pl','frPl'],['fr-g','frG']].forEach(function(p){$(p[0]).addEventListener('input',function(){S[p[1]]=$(p[0]).value.replace(/#/g,'').trim();render();});});
+document.querySelectorAll('input[name=rol]').forEach(function(r){r.addEventListener('change',function(){S.rol=r.value;render();});});
+document.querySelectorAll('input[name=frn]').forEach(function(r){r.addEventListener('change',function(){S.frN=r.value;render();});});
+document.querySelectorAll('input[name=frc]').forEach(function(r){r.addEventListener('change',function(){S.frC=r.value;render();});});
+['reel','also','sala','ficha','audio'].forEach(function(k){$(k).addEventListener('change',function(){S[k]=$(k).checked;render();});});
+$('margin').addEventListener('input',function(){S.margin=+$('margin').value;render();});
+
+/* editor de cortes */
+document.querySelectorAll('.qbtns button').forEach(function(b){b.addEventListener('click',function(){Q=+b.dataset.q;render();});});
+document.querySelectorAll('.board [data-tag]').forEach(function(b){b.addEventListener('click',function(){var t=b.dataset.tag,i=TAGS.indexOf(t);if(i>=0)TAGS.splice(i,1);else TAGS.push(t);render();});});
+function normField(id){var v=parseClock($(id).value);if(v!=null)$(id).value=fmtClock(v);$(id).classList.toggle('err',!!$(id).value.trim()&&v==null);return v;}
+$('c-s').addEventListener('blur',function(){normField('c-s');});
+$('c-e').addEventListener('blur',function(){normField('c-e');});
+$('c-s').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();$('c-e').focus();}});
+$('c-e').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addCut();}});
+$('c-note').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addCut();}});
+document.querySelectorAll('.quick [data-d]').forEach(function(b){b.addEventListener('click',function(){
+  var s=normField('c-s'); if(s==null){cmsg('Escribe primero el reloj de inicio.','err');$('c-s').focus();return;}
+  $('c-e').value=fmtClock(Math.max(0,s-(+b.dataset.d)));$('c-e').classList.remove('err');cmsg('');});});
+function addCut(){
+  var s=normField('c-s'), e=normField('c-e');
+  if(s==null){cmsg('El reloj de inicio no se entiende. Prueba con 9:34 o 934.','err');$('c-s').focus();return;}
+  if(e==null){cmsg('Falta el reloj de final (o usa un atajo «−12 s»).','err');$('c-e').focus();return;}
+  if(s>qLen(Q)){cmsg(fmtClock(s)+' no existe en un'+(Q<=4?' cuarto (máximo 10:00).':'a prórroga (máximo 5:00).'),'err');return;}
+  if(s<=e){cmsg('El reloj va hacia atrás: el inicio debe ser mayor que el final ('+fmtClock(s)+' → '+fmtClock(e)+').','err');return;}
+  var c={q:Q,s:s,e:e,tags:TAGS.slice(),note:$('c-note').value.replace(/#/g,'').trim()};
+  if(EDIT>=0){S.cuts[EDIT]=c;cmsg('Corte actualizado: '+qName(Q)+' '+fmtClock(s)+' → '+fmtClock(e)+'.','ok');}
+  else{S.cuts.push(c);cmsg('Apuntado: '+qName(Q)+' '+fmtClock(s)+' → '+fmtClock(e)+'.','ok');}
+  EDIT=-1; TAGS=[]; $('c-s').value='';$('c-e').value='';$('c-note').value=''; render(); $('c-s').focus();
+}
+$('c-add').addEventListener('click',addCut);
+$('c-cancel').addEventListener('click',function(){EDIT=-1;TAGS=[];$('c-s').value='';$('c-e').value='';$('c-note').value='';cmsg('');render();});
+$('cuts').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.rm!=null){var i=+b.dataset.rm,old=S.cuts[i];S.cuts.splice(i,1);if(EDIT===i)EDIT=-1;render();
+    cmsg('Corte borrado ('+qName(old.q)+' '+fmtClock(old.s)+').','ok');}
+  if(b.dataset.edit!=null){EDIT=+b.dataset.edit;var c=S.cuts[EDIT];Q=c.q;TAGS=(c.tags||[]).slice();
+    $('c-s').value=fmtClock(c.s);$('c-e').value=fmtClock(c.e);$('c-note').value=c.note||'';cmsg('Editando el corte '+qName(c.q)+' '+fmtClock(c.s)+'.','');render();
+    $('pB').querySelector('.board').scrollIntoView({block:'center'});}
+});
+
+/* exportar y copiar */
+var RESET_ARMED=false;
+$('reset').addEventListener('click',function(){
+  if(!RESET_ARMED){RESET_ARMED=true;$('reset').textContent='Toca otra vez para borrarlo todo';setTimeout(function(){RESET_ARMED=false;$('reset').textContent='Empezar un encargo nuevo';},4000);return;}
+  RESET_ARMED=false;S=JSON.parse(JSON.stringify(DEF));EDIT=-1;TAGS=[];Q=1;$('reset').textContent='Empezar un encargo nuevo';cmsg('');render();setSt('Encargo vacío. Empieza cuando quieras.','ok');
+});
+$('copy').addEventListener('click',function(){
+  var t=buildTxt(S,today());
+  var ok=function(){setSt('Texto copiado. Pégalo en un fichero encargo.txt.','ok');};
+  var fallback=function(){var r=document.createRange();r.selectNodeContents($('txt'));var sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+    setSt('No he podido copiar solo: el texto está seleccionado, cópialo tú.','err');};
+  try{navigator.clipboard.writeText(t).then(ok,fallback);}catch(e){fallback();}
+});
+var DL=null;
+if(window.claude&&typeof window.claude.use==='function'){window.claude.use('downloads').then(function(d){DL=d;}).catch(function(){DL=null;});}
+$('export').addEventListener('click',function(){
+  var t=buildTxt(S,today());
+  if(DL){
+    DL.save({filename:'encargo.txt',data:t}).then(function(){setSt('encargo.txt exportado. En el PC, ponlo en la carpeta del partido.','ok');},function(err){
+      var c=err&&err.code;
+      if(c==='declined') setSt('Exportación cancelada.','');
+      else if(c==='rate_limited') setSt('Ya hay una descarga abierta. Termina esa y vuelve a probar.','err');
+      else setSt('Aquí no se puede descargar: usa «Copiar texto».','err');
+    });
+    return;
+  }
+  try{ // copia local (fuera de claude.ai): descarga normal
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+t],{type:'text/plain;charset=utf-8'}));a.download='encargo.txt';
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},800);
+    setSt('encargo.txt descargado. Ponlo en la carpeta del partido.','ok');
+  }catch(e){setSt('No he podido descargarlo: usa «Copiar texto».','err');}
+});
+
+/* ===== envío al PC por ntfy (misma clave que las notas en caliente) ===== */
+var NTFY='https://ntfy.sh', NK=null;
+try{NK=localStorage.getItem('vbn-key');}catch(e){}
+(function(){var m=/[#&]k=([\w-]{8,64})/.exec(location.hash||'');if(m){NK=m[1];try{localStorage.setItem('vbn-key',NK);}catch(e){}try{history.replaceState(null,'',location.pathname);}catch(e){}}})();
+function paintNK(){$('nkt').textContent=NK?'✓ Conectado con tu PC':'Sin conectar con el PC: abre el enlace que te manda (Alertas → 🎬) o pon la clave';$('nk').className='nk'+(NK?' ok':'');}
+$('nkb').addEventListener('click',function(){var v=prompt('Clave (la misma de las notas: vbscout-notas-…)',NK||'');if(v===null)return;v=v.trim();
+  if(v&&!/^[\w-]{8,64}$/.test(v)){setSt('Esa clave no es válida.','err');return;}
+  NK=v||null;try{v?localStorage.setItem('vbn-key',v):localStorage.removeItem('vbn-key');}catch(e){}paintNK();loadGames();});
+function fillGames(j){if(j&&Array.isArray(j.sala))$('games').innerHTML=j.sala.map(function(n){return '<option value="'+esc(n)+'"></option>';}).join('');}
+try{fillGames(JSON.parse(localStorage.getItem('vbn-datos')||'null'));}catch(e){}
+function b64ToBytes(b){var x=atob(b),u=new Uint8Array(x.length);for(var i=0;i<x.length;i++)u[i]=x.charCodeAt(i);return u;}
+function bytesToB64(u){var x='';for(var i=0;i<u.length;i+=0x8000)x+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(x);}
+async function loadGames(){if(!NK||typeof DecompressionStream==='undefined')return;
+  try{var r=await fetch(NTFY+'/'+NK+'/json?poll=1&since=12h',{cache:'no-store'});if(!r.ok)return;var t=await r.text(),last=null;
+    t.split('\n').forEach(function(l){try{var m=JSON.parse(l);if(m.event==='message'&&/^VBD1\|/.test(m.message||''))last=m;}catch(e){}});
+    if(!last)return;var ds=new DecompressionStream('deflate-raw');
+    var j=JSON.parse(new TextDecoder().decode(new Uint8Array(await new Response(new Blob([b64ToBytes(last.message.slice(5))]).stream().pipeThrough(ds)).arrayBuffer())));
+    fillGames(j);try{localStorage.setItem('vbn-datos',JSON.stringify(j));}catch(e){}}catch(e){}}
+$('send').addEventListener('click',async function(){
+  if(problems().length)return;
+  if(!NK){setSt('Sin conectar con el PC: toca 🔑 Clave (o usa ⬇ .txt).','err');$('nk').scrollIntoView({block:'center'});return;}
+  var b=$('send'),body=bytesToB64(new TextEncoder().encode(buildTxt(S,today()))),id=Math.random().toString(36).slice(2,12),parts=[];
+  for(var i=0;i<body.length;i+=3000)parts.push(body.slice(i,i+3000));
+  b.disabled=true;setSt('Enviando…','');
+  try{for(var p=0;p<parts.length;p++){var r=await fetch(NTFY+'/'+NK,{method:'POST',body:'VBE1|'+id+'|'+(p+1)+'|'+parts.length+'|'+parts[p]});
+      if(!r.ok)throw new Error(r.status===429?'límite diario de ntfy alcanzado':'ntfy '+r.status);}
+    setSt('✓ Enviado. El PC lo monta solo y te avisa al móvil cuando esté el vídeo (si está apagado, espera ~12 h en el canal).','ok');}
+  catch(e){setSt('No se pudo enviar ('+e.message+'). Prueba otra vez o usa ⬇ .txt.','err');}
+  b.disabled=false;});
+paintNK();loadGames();
+
+if(S.mode==='B'&&S.cuts.length){var last=S.cuts[S.cuts.length-1];Q=last.q;}
+render();
+</script>
+</html>
