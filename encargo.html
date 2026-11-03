@@ -209,6 +209,10 @@ details.guide[open] summary::after{content:"−"}
         <button type="button" class="chip" data-d="8">−8 s</button><button type="button" class="chip" data-d="12">−12 s</button>
         <button type="button" class="chip" data-d="20">−20 s</button><button type="button" class="chip" data-d="30">−30 s</button>
       </div>
+      <div class="quick" aria-label="Tiros libres">
+        <span class="hint">Tiros libres (reloj parado en el de inicio)</span>
+        <button type="button" class="chip" data-tl="all">TL · parada entera</button><button type="button" class="chip" data-tl="solo">TL · solo anotados</button>
+      </div>
       <div class="chips" role="group" aria-label="Etiquetas">
         <button type="button" class="chip" data-tag="bloqueo">bloqueo</button>
         <button type="button" class="chip" data-tag="corte">corte</button>
@@ -363,7 +367,7 @@ function buildTxt(S,stamp){
     if(S.prota) L.push('JUGADOR: '+S.prota);
     S.cuts.forEach(function(c){
       var extra=[].concat(c.tags||[]).concat(c.note?[c.note]:[]).join(' · ');
-      L.push(qName(c.q)+' '+fmtClock(c.s)+'/'+fmtClock(c.e)+(extra?' '+extra:''));
+      L.push(qName(c.q)+' '+fmtClock(c.s)+(c.tl?' TL'+(c.tl==='solo'?' solo':''):'/'+fmtClock(c.e))+(extra?' '+extra:''));
     });
     if(S.prota) L.push('TAMBIEN AUTO: '+yes(S.also));
     if(S.prota&&S.also){ L.push('REEL: '+yes(S.reel)); if(S.rol) L.push('ROL: '+S.rol); }
@@ -409,8 +413,8 @@ function render(){
   document.querySelectorAll('.board [data-tag]').forEach(function(b){b.setAttribute('aria-pressed',TAGS.indexOf(b.dataset.tag)>=0?'true':'false');});
   var cuts=S.cuts.map(function(c,i){return {c:c,i:i};}).sort(function(a,b){return a.c.q-b.c.q||b.c.s-a.c.s;});
   $('cuts').innerHTML=cuts.map(function(o){var c=o.c,extra=[].concat(c.tags||[]).concat(c.note?[c.note]:[]).join(' · ');
-    return '<li'+(o.i===EDIT?' class="editing"':'')+'><span class="cq">'+qName(c.q)+'</span><span><span class="ct">'+fmtClock(c.s)+' → '+fmtClock(c.e)+'</span>'
-      +'<span class="cn">'+Math.round((c.s-c.e)*10)/10+' s de reloj'+(extra?' · '+esc(extra):'')+'</span></span>'
+    return '<li'+(o.i===EDIT?' class="editing"':'')+'><span class="cq">'+qName(c.q)+'</span><span><span class="ct">'+fmtClock(c.s)+(c.tl?' · TL':' → '+fmtClock(c.e))+'</span>'
+      +'<span class="cn">'+(c.tl==='solo'?'tiros libres: solo los anotados':c.tl?'tiros libres: la parada entera':Math.round((c.s-c.e)*10)/10+' s de reloj')+(extra?' · '+esc(extra):'')+'</span></span>'
       +'<span class="cb"><button type="button" data-edit="'+o.i+'" aria-label="Editar">Editar</button><button type="button" data-rm="'+o.i+'" aria-label="Borrar">✕</button></span></li>';}).join('');
   $('cuts-empty').hidden=S.cuts.length>0;
   $('c-add').textContent=EDIT>=0?'Guardar cambios':'Añadir corte'; $('c-cancel').hidden=EDIT<0;
@@ -463,13 +467,20 @@ function addCut(){
   EDIT=-1; TAGS=[]; $('c-s').value='';$('c-e').value='';$('c-note').value=''; render(); $('c-s').focus();
 }
 $('c-add').addEventListener('click',addCut);
+document.querySelectorAll('.quick [data-tl]').forEach(function(b){b.addEventListener('click',function(){
+  var s=normField('c-s'), tl=b.dataset.tl;
+  if(s==null){cmsg('Escribe en «Empieza» el reloj en el que se tiran los libres (p. ej. 4:12).','err');$('c-s').focus();return;}
+  if(s>qLen(Q)){cmsg(fmtClock(s)+' no existe en un'+(Q<=4?' cuarto (máximo 10:00).':'a prórroga (máximo 5:00).'),'err');return;}
+  var c={q:Q,s:s,e:s,tl:tl,tags:TAGS.slice(),note:$('c-note').value.replace(/#/g,'').trim()}, t=qName(Q)+' '+fmtClock(s)+' TL'+(tl==='solo'?' solo':'');
+  if(EDIT>=0){S.cuts[EDIT]=c;cmsg('Corte actualizado: '+t+'.','ok');} else {S.cuts.push(c);cmsg('Apuntado: '+t+'.','ok');}
+  EDIT=-1; TAGS=[]; $('c-s').value='';$('c-e').value='';$('c-note').value=''; render(); $('c-s').focus();});});
 $('c-cancel').addEventListener('click',function(){EDIT=-1;TAGS=[];$('c-s').value='';$('c-e').value='';$('c-note').value='';cmsg('');render();});
 $('cuts').addEventListener('click',function(e){
   var b=e.target.closest('button'); if(!b) return;
   if(b.dataset.rm!=null){var i=+b.dataset.rm,old=S.cuts[i];S.cuts.splice(i,1);if(EDIT===i)EDIT=-1;render();
     cmsg('Corte borrado ('+qName(old.q)+' '+fmtClock(old.s)+').','ok');}
   if(b.dataset.edit!=null){EDIT=+b.dataset.edit;var c=S.cuts[EDIT];Q=c.q;TAGS=(c.tags||[]).slice();
-    $('c-s').value=fmtClock(c.s);$('c-e').value=fmtClock(c.e);$('c-note').value=c.note||'';cmsg('Editando el corte '+qName(c.q)+' '+fmtClock(c.s)+'.','');render();
+    $('c-s').value=fmtClock(c.s);$('c-e').value=c.tl?'':fmtClock(c.e);$('c-note').value=c.note||'';cmsg(c.tl?'Editando los tiros libres de '+qName(c.q)+' '+fmtClock(c.s)+': guarda con uno de los botones TL.':'Editando el corte '+qName(c.q)+' '+fmtClock(c.s)+'.','');render();
     $('pB').querySelector('.board').scrollIntoView({block:'center'});}
 });
 
