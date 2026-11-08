@@ -182,11 +182,14 @@ var app=document.getElementById('app'), bar=document.getElementById('bar');
 function render(){ paintKey(); if(CUR&&NOTES[CUR]) renderNote(NOTES[CUR]); else { CUR=null; renderList(); } paintBar(); }
 function renderList(){ var arr=Object.values(NOTES).sort(function(a,b){ return b.ts-a.ts; });
   var h='<div class="card"><h2>📝 Tus notas<span class="sp"></span><button class="btn sm pri" id="nnew">＋ Nueva</button></h2>'+
-    '<div class="muted">Se guardan en este móvil al escribir. Cuando acabes, 📤 al PC (o ⬇ fichero) y en el Informe de Partido: «📥 Móvil».</div></div>';
+    '<div class="muted">Se guardan en este móvil al escribir. Cuando acabes, 📤 al PC (o ⬇ fichero) y en el Informe de Partido: «📥 Móvil».</div></div>'+
+    '<div class="card"><h2>📓 Bitácora<span class="sp"></span><button class="btn sm" id="nbit">✍️ Nota rápida</button></h2>'+
+    '<div class="muted">Una idea suelta, algo que no quieres olvidar o una impresión de un jugador: va directa a la bitácora del PC (con el jugador, a su hilo).</div></div>';
   if(!arr.length) h+='<div class="empty">Aún no hay notas.<br>Pulsa «＋ Nueva» al empezar un partido.</div>';
   arr.forEach(function(n){ var s=status(n); h+='<div class="note" data-id="'+n.id+'"><div class="av">'+esc(ini(n.player.n))+'</div><div class="m"><b>'+esc(n.player.n||'(sin nombre)')+'</b><span class="muted">'+esc([n.player.team,n.game.opp?'vs '+n.game.opp:'',n.game.comp,fmtD(n.game.date)].filter(Boolean).join(' · '))+'</span></div><span class="st '+s[0]+'">'+esc(s[1])+'</span></div>'; });
   app.innerHTML=h;
   document.getElementById('nnew').onclick=function(){ metaSheet(null); };
+  document.getElementById('nbit').onclick=bitSheet;
   app.querySelectorAll('.note').forEach(function(el){ el.onclick=function(){ CUR=el.dataset.id; render(); scrollTo(0,0); }; }); }
 
 function chip(cat,side,t,b){ var on=b.tags.indexOf(t)>=0, g=b.g[t]||0, cls=on?(g>0?'g':(g<0?'r':'n')):'';
@@ -259,6 +262,19 @@ function metaSheet(n,sibling){ var isNew=!n, base=n||newNote(sibling||null), T=(
     $('mok').onclick=function(){ var nm=$('mn').value.trim(); if(!nm){ toast('Pon el nombre del jugador'); return; }
       base.player={n:nm.slice(0,80),team:$('mt').value.trim().slice(0,80)}; base.game.opp=$('mo').value.trim().slice(0,80); base.game.comp=$('mc').value.trim().toUpperCase().slice(0,10); base.game.date=$('md').value||today();
       save(base); CUR=base.id; closeSheet(); render(); if(isNew) scrollTo(0,0); }; }); }
+
+// ── 📓 nota rápida a la BITÁCORA del PC: texto libre por el mismo tema («📓 Jugador: texto»; alertas_movil.js → bitacora.json) ──
+function bitSheet(){ var T=(DATOS&&DATOS.targets)||[], d=rd('vbn-bit-draft',{p:'',x:''});
+  sheet('<h3>📓 Nota a la bitácora</h3><label class="f">Jugador (opcional)</label><input class="t" id="bp" list="bpl" value="'+esc(d.p)+'" placeholder="De tus objetivos o en blanco" autocomplete="off"><datalist id="bpl">'+
+    T.map(function(t){ return '<option value="'+esc(t.n)+'">'; }).join('')+'</datalist><textarea class="t" id="bx" placeholder="Lo que quieres apuntar…" style="margin-top:10px" autofocus>'+esc(d.x)+'</textarea>'+
+    '<div class="row" style="margin-top:12px"><button class="btn pri" id="bok">📤 Mandar al PC</button><button class="btn" data-close>Cancelar</button></div>',
+  function(root){ var px=root.querySelector('#bp'), tx=root.querySelector('#bx'), keep=function(){ wr('vbn-bit-draft',{p:px.value,x:tx.value}); };
+    px.addEventListener('input',keep); tx.addEventListener('input',keep);
+    root.querySelector('#bok').onclick=async function(){ var x=tx.value.trim(), p=px.value.trim(); if(!x){ toast('Escribe la nota'); return; }
+      if(!KEY){ toast('Sin clave: pon la clave (🔑)'); return; }
+      try{ var r=await fetch(NTFY+'/'+KEY,{method:'POST',body:'📓 '+(p?p.replace(/:/g,' ')+': ':'')+x.slice(0,3500)}); if(!r.ok) throw new Error(r.status);
+        wr('vbn-bit-draft',{p:'',x:''}); closeSheet(); toast('📓 Mandada a la bitácora'); }
+      catch(e){ toast('✗ No se pudo enviar (¿sin cobertura?). Queda guardada aquí: reintenta'); } }; }); }
 
 // ── nota con minuto (botón flotante) ──
 function tlSheet(n){ var last=n.timeline[n.timeline.length-1]||{}, q=last.q||'1C', cat=last.cat||'ataque', side='on';
