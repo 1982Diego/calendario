@@ -533,9 +533,22 @@ function fillGames(j){if(j&&Array.isArray(j.tags)&&j.tags.length){JUG=j.tags;pai
 try{fillGames(JSON.parse(localStorage.getItem('vbn-datos')||'null'));}catch(e){}
 function b64ToBytes(b){var x=atob(b),u=new Uint8Array(x.length);for(var i=0;i<x.length;i++)u[i]=x.charCodeAt(i);return u;}
 function bytesToB64(u){var x='';for(var i=0;i<u.length;i+=0x8000)x+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(x);}
+/* 🔐 S10 (16-nov): todo lo que se manda o se lee del tema va cifrado «VBX1|base64(iv‖AES-GCM)», clave derivada del tema
+   (PBKDF2-SHA256 100.000, sal «vbscout-ntfy-v1»): igual que alertas_movil.js. Lo viejo sin cifrar se sigue leyendo. */
+var VBX_SALT='vbscout-ntfy-v1', _vbxK={};
+function vbxOk(){ return !!(window.crypto&&crypto.subtle); }
+function vbxKey(t){ return _vbxK[t]||(_vbxK[t]=crypto.subtle.importKey('raw',new TextEncoder().encode(t),'PBKDF2',false,['deriveKey']).then(function(b){
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:new TextEncoder().encode(VBX_SALT),iterations:100000,hash:'SHA-256'},b,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); })); }
+async function vbxEnc(t,txt){ if(!vbxOk()) return txt; var iv=crypto.getRandomValues(new Uint8Array(12));
+  var ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},await vbxKey(t),new TextEncoder().encode(txt)));
+  var all=new Uint8Array(12+ct.length); all.set(iv); all.set(ct,12); return 'VBX1|'+bytesToB64(all); }
+async function vbxDec(t,m){ m=String(m==null?'':m); if(!/^VBX1\|/.test(m)) return m; if(!vbxOk()) return null;
+  try{ var b=b64ToBytes(m.slice(5)); return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},await vbxKey(t),b.slice(12))); }catch(e){ return null; } }
+async function lastVBD1(t,txt){ var ms=[]; txt.split('\n').forEach(function(l){ try{ var m=JSON.parse(l); if(m.event==='message') ms.push(m.message||''); }catch(e){} });
+  for(var i=ms.length-1;i>=0;i--){ var d=await vbxDec(t,ms[i]); if(d&&/^VBD1\|/.test(d)) return {message:d}; } return null; }
 async function loadGames(){if(!NK||typeof DecompressionStream==='undefined')return;
   try{var r=await fetch(NTFY+'/'+NK+'/json?poll=1&since=12h',{cache:'no-store'});if(!r.ok)return;var t=await r.text(),last=null;
-    t.split('\n').forEach(function(l){try{var m=JSON.parse(l);if(m.event==='message'&&/^VBD1\|/.test(m.message||''))last=m;}catch(e){}});
+    last=await lastVBD1(NK,t);
     if(!last)return;var ds=new DecompressionStream('deflate-raw');
     var j=JSON.parse(new TextDecoder().decode(new Uint8Array(await new Response(new Blob([b64ToBytes(last.message.slice(5))]).stream().pipeThrough(ds)).arrayBuffer())));
     fillGames(j);try{localStorage.setItem('vbn-datos',JSON.stringify(j));}catch(e){}}catch(e){}}
@@ -543,9 +556,9 @@ $('send').addEventListener('click',async function(){
   if(problems().length)return;
   if(!NK){setSt('Sin conectar con el PC: toca 🔑 Clave (o usa ⬇ .txt).','err');$('nk').scrollIntoView({block:'center'});return;}
   var b=$('send'),body=bytesToB64(new TextEncoder().encode(buildTxt(S,today()))),id=Math.random().toString(36).slice(2,12),parts=[];
-  for(var i=0;i<body.length;i+=3000)parts.push(body.slice(i,i+3000));
+  for(var i=0;i<body.length;i+=2400)parts.push(body.slice(i,i+2400));/* 2400: cifrado sigue < 4 KB */
   b.disabled=true;setSt('Enviando…','');
-  try{for(var p=0;p<parts.length;p++){var r=await fetch(NTFY+'/'+NK,{method:'POST',body:'VBE1|'+id+'|'+(p+1)+'|'+parts.length+'|'+parts[p]});
+  try{for(var p=0;p<parts.length;p++){var r=await fetch(NTFY+'/'+NK,{method:'POST',body:await vbxEnc(NK,'VBE1|'+id+'|'+(p+1)+'|'+parts.length+'|'+parts[p])});
       if(!r.ok)throw new Error(r.status===429?'límite diario de ntfy alcanzado':'ntfy '+r.status);}
     setSt('✓ Enviado. El PC lo monta solo y te avisa al móvil cuando esté el vídeo (si está apagado, espera ~12 h en el canal).','ok');}
   catch(e){setSt('No se pudo enviar ('+e.message+'). Prueba otra vez o usa ⬇ .txt.','err');}

@@ -149,11 +149,24 @@ function keySheet(){ sheet('<h3>🔑 Conexión con el PC</h3>'+
 // ── tus objetivos (llegan del PC por el mismo canal: «VBD1|…») para autocompletar ──
 function b64ToBytes(b){ var s=atob(b), u=new Uint8Array(s.length); for(var i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
 function bytesToB64(u){ var s=''; for(var i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); }
+/* 🔐 S10 (16-nov): todo lo que se manda o se lee del tema va cifrado «VBX1|base64(iv‖AES-GCM)», clave derivada del tema
+   (PBKDF2-SHA256 100.000, sal «vbscout-ntfy-v1»): igual que alertas_movil.js. Lo viejo sin cifrar se sigue leyendo. */
+var VBX_SALT='vbscout-ntfy-v1', _vbxK={};
+function vbxOk(){ return !!(window.crypto&&crypto.subtle); }
+function vbxKey(t){ return _vbxK[t]||(_vbxK[t]=crypto.subtle.importKey('raw',new TextEncoder().encode(t),'PBKDF2',false,['deriveKey']).then(function(b){
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:new TextEncoder().encode(VBX_SALT),iterations:100000,hash:'SHA-256'},b,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); })); }
+async function vbxEnc(t,txt){ if(!vbxOk()) return txt; var iv=crypto.getRandomValues(new Uint8Array(12));
+  var ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},await vbxKey(t),new TextEncoder().encode(txt)));
+  var all=new Uint8Array(12+ct.length); all.set(iv); all.set(ct,12); return 'VBX1|'+bytesToB64(all); }
+async function vbxDec(t,m){ m=String(m==null?'':m); if(!/^VBX1\|/.test(m)) return m; if(!vbxOk()) return null;
+  try{ var b=b64ToBytes(m.slice(5)); return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},await vbxKey(t),b.slice(12))); }catch(e){ return null; } }
+async function lastVBD1(t,txt){ var ms=[]; txt.split('\n').forEach(function(l){ try{ var m=JSON.parse(l); if(m.event==='message') ms.push(m.message||''); }catch(e){} });
+  for(var i=ms.length-1;i>=0;i--){ var d=await vbxDec(t,ms[i]); if(d&&/^VBD1\|/.test(d)) return {message:d}; } return null; }
 async function inflate(u){ var ds=new DecompressionStream('deflate-raw'); var r=new Response(new Blob([u]).stream().pipeThrough(ds)); return new Uint8Array(await r.arrayBuffer()); }
 async function deflate(u){ var cs=new CompressionStream('deflate-raw'); var r=new Response(new Blob([u]).stream().pipeThrough(cs)); return new Uint8Array(await r.arrayBuffer()); }
 async function loadDatos(){ if(!KEY||typeof DecompressionStream==='undefined') return;
   try{ var r=await fetch(NTFY+'/'+KEY+'/json?poll=1&since=12h',{cache:'no-store'}); if(!r.ok) return; var t=await r.text(), last=null;
-    t.split('\n').forEach(function(l){ try{ var m=JSON.parse(l); if(m.event==='message'&&/^VBD1\|/.test(m.message||'')) last=m; }catch(e){} });
+    last=await lastVBD1(KEY,t);
     if(!last) return; var j=JSON.parse(new TextDecoder().decode(await inflate(b64ToBytes(last.message.slice(5)))));
     if(j&&Array.isArray(j.targets)){ DATOS=j; wr(LSD,j); if(!CUR) render(); } }catch(e){} }
 
@@ -162,9 +175,9 @@ async function sendNote(n){ if(!KEY){ toast('Sin clave: usa ⬇ fichero o pon la
   if(!n.player.n.trim()){ toast('Pon el nombre del jugador'); return; }
   var raw=new TextEncoder().encode(JSON.stringify(n)), z='j', body;
   try{ if(typeof CompressionStream!=='undefined'){ raw=await deflate(raw); z='z'; } }catch(e){ z='j'; }
-  body=bytesToB64(raw); var size=3000, parts=[]; for(var i=0;i<body.length;i+=size) parts.push(body.slice(i,i+size));
+  body=bytesToB64(raw); var size=2400, parts=[];   /* 2400: cifrado (+33 %) sigue < 4 KB de ntfy */ for(var i=0;i<body.length;i+=size) parts.push(body.slice(i,i+size));
   var ver=String(n.ts); toast('Enviando…');
-  try{ for(var p=0;p<parts.length;p++){ var r=await fetch(NTFY+'/'+KEY,{method:'POST',body:'VBN1|'+n.id+'|'+ver+'|'+(p+1)+'|'+parts.length+'|'+z+'|'+parts[p]});
+  try{ for(var p=0;p<parts.length;p++){ var r=await fetch(NTFY+'/'+KEY,{method:'POST',body:await vbxEnc(KEY,'VBN1|'+n.id+'|'+ver+'|'+(p+1)+'|'+parts.length+'|'+z+'|'+parts[p])});
       if(!r.ok) throw new Error('ntfy '+r.status); }
     n.sent=Date.now(); NOTES[n.id]=n; n.sent=Math.max(n.sent,n.ts); wr(LS,NOTES); toast('📤 Enviada al PC · '+n.player.n); render(); }
   catch(e){ toast('✗ No se pudo enviar (¿sin cobertura?). Queda guardada: reintenta o usa ⬇ fichero'); } }
@@ -272,7 +285,7 @@ function bitSheet(){ var T=(DATOS&&DATOS.targets)||[], d=rd('vbn-bit-draft',{p:'
     px.addEventListener('input',keep); tx.addEventListener('input',keep);
     root.querySelector('#bok').onclick=async function(){ var x=tx.value.trim(), p=px.value.trim(); if(!x){ toast('Escribe la nota'); return; }
       if(!KEY){ toast('Sin clave: pon la clave (🔑)'); return; }
-      try{ var r=await fetch(NTFY+'/'+KEY,{method:'POST',body:'📓 '+(p?p.replace(/:/g,' ')+': ':'')+x.slice(0,3500)}); if(!r.ok) throw new Error(r.status);
+      try{ var r=await fetch(NTFY+'/'+KEY,{method:'POST',body:await vbxEnc(KEY,'📓 '+(p?p.replace(/:/g,' ')+': ':'')+x.slice(0,2200))}); if(!r.ok) throw new Error(r.status);
         wr('vbn-bit-draft',{p:'',x:''}); closeSheet(); toast('📓 Mandada a la bitácora'); }
       catch(e){ toast('✗ No se pudo enviar (¿sin cobertura?). Queda guardada aquí: reintenta'); } }; }); }
 
